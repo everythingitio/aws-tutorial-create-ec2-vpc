@@ -113,10 +113,28 @@ resource "aws_iam_role_policy_attachment" "default_ssm_policy_attachment" {
   role       = aws_iam_role.default_ssm_role.name
 }
 
+variable "key_pair_name" {
+  type    = string
+  default = "demokeypair"
+}
+
+# ssh-keygen -t rsa -b 4096
+variable "public_key" {
+  type    = string
+  default = "ssh-rsa xxxxxxx"
+}
+
+resource "aws_key_pair" "demo_key_pair" {
+  key_name   = var.key_pair_name
+  public_key = var.public_key
+}
+
+# ssh ec2-user@ip
 resource "aws_instance" "tutorial-EC2" {
   ami                  = "ami-0e9107ed11be76fde"
   subnet_id            = aws_subnet.tutorial-subnet.id
   instance_type        = "t2.micro"
+  key_name             = aws_key_pair.demo_key_pair.key_name
   iam_instance_profile = aws_iam_instance_profile.default_ssm_instance_profile.name
   vpc_security_group_ids = [aws_security_group.tutorial-sg.id, aws_security_group.tutorial-sg-ssh.id]
   user_data         = <<-EOF
@@ -127,4 +145,12 @@ resource "aws_instance" "tutorial-EC2" {
                 sudo systemctl enable httpd
                 echo "Hello, EVTIO Liam World!" | sudo tee /var/www/html/index.html
 EOF
+}
+
+resource "aws_s3_bucket" "evtbucket" {
+  bucket = "everythingitiobucket-testing-terraform"
+  tags  = {
+    Name = "EVT Bucket"
+    Environment = "dev"
+  }
 }

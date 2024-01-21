@@ -1,19 +1,20 @@
 provider "aws" {
-  region     = "us-east-1"
-  access_key = "access-key"
-  secret_key = "secret-key"
+  region = "us-east-1"
+  profile = "everythingit"
 }
 
 terraform {
-  required_version = ">=0.13"
+  required_version = ">= 0.13"
 
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~>3.37.0"
+      version = "~> 3.37.0"
     }
   }
 }
+
+# ami-0e9107ed11be76fde
 
 resource "aws_vpc" "tutorial-vpc" {
   cidr_block           = "10.0.0.0/16"
@@ -21,8 +22,8 @@ resource "aws_vpc" "tutorial-vpc" {
 }
 
 resource "aws_subnet" "tutorial-subnet" {
-  cidr_block              = "10.0.1.0/24"
   vpc_id                  = aws_vpc.tutorial-vpc.id
+  cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
   availability_zone       = "us-east-1a"
 }
@@ -40,8 +41,8 @@ resource "aws_route_table" "tutorial-rt" {
 }
 
 resource "aws_route_table_association" "tutorial-rta" {
-  route_table_id = aws_route_table.tutorial-rt.id
   subnet_id      = aws_subnet.tutorial-subnet.id
+  route_table_id = aws_route_table.tutorial-rt.id
 }
 
 resource "aws_security_group" "tutorial-sg" {
@@ -61,9 +62,21 @@ resource "aws_security_group" "tutorial-sg" {
   }
 }
 
-resource "aws_iam_instance_profile" "default_ssm_instance_profile" {
-  name = "DefaultSSMProfile"
-  role = aws_iam_role.default_ssm_role.name
+resource "aws_security_group" "tutorial-sg-ssh" {
+  vpc_id = aws_vpc.tutorial-vpc.id
+  egress {
+    from_port   = 22
+    protocol    = "tcp"
+    to_port     = 22
+    cidr_blocks = ["0.0.0.0/0"]
+  }  
+  ingress {
+    description = "SSH from VPC"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 resource "aws_iam_role" "default_ssm_role" {
@@ -86,6 +99,11 @@ resource "aws_iam_role" "default_ssm_role" {
 EOF
 }
 
+resource "aws_iam_instance_profile" "default_ssm_instance_profile" {
+  name = "DefaultSSMProfile"
+  role = aws_iam_role.default_ssm_role.name
+}
+
 data "aws_iam_policy" "AmazonSSMManagedInstanceCore" {
   arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
@@ -95,21 +113,18 @@ resource "aws_iam_role_policy_attachment" "default_ssm_policy_attachment" {
   role       = aws_iam_role.default_ssm_role.name
 }
 
-resource "aws_instance" "tutorial-ec2" {
-  ami                    = "ami-0dc2d3e4c0f9ebd18"
-  subnet_id              = aws_subnet.tutorial-subnet.id
-  instance_type          = "t2.micro"
-  iam_instance_profile   = aws_iam_instance_profile.default_ssm_instance_profile.name
-  vpc_security_group_ids = [aws_security_group.tutorial-sg.id]
-  user_data              = <<-EOF
+resource "aws_instance" "tutorial-EC2" {
+  ami                  = "ami-0e9107ed11be76fde"
+  subnet_id            = aws_subnet.tutorial-subnet.id
+  instance_type        = "t2.micro"
+  iam_instance_profile = aws_iam_instance_profile.default_ssm_instance_profile.name
+  vpc_security_group_ids = [aws_security_group.tutorial-sg.id, aws_security_group.tutorial-sg-ssh.id]
+  user_data         = <<-EOF
                 #! /bin/bash
                 sudo yum update
                 sudo yum install -y httpd
                 sudo systemctl start httpd
                 sudo systemctl enable httpd
-                echo "
-Hello, World!
-
-" | sudo tee /var/www/html/index.html
-        EOF
+                echo "Hello, EVTIO Liam World!" | sudo tee /var/www/html/index.html
+EOF
 }
